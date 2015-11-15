@@ -7,43 +7,68 @@
 #
 # To enable this hook, rename this file to "pre-commit".
 
-if git rev-parse --verify HEAD >/dev/null 2>&1
-then
-	against=HEAD
-else
-	# Initial commit: diff against an empty tree object
-	against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
-fi
+# if git rev-parse --verify HEAD >/dev/null 2>&1
+# then
+# 	against=HEAD
+# else
+# 	# Initial commit: diff against an empty tree object
+# 	against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+# fi
+#
+# # If you want to allow non-ASCII filenames set this variable to true.
+# allownonascii=$(git config --bool hooks.allownonascii)
+#
+# # Redirect output to stderr.
+# exec 1>&2
+#
+# # Cross platform projects tend to avoid non-ASCII filenames; prevent
+# # them from being added to the repository. We exploit the fact that the
+# # printable range starts at the space character and ends with tilde.
+# if [ "$allownonascii" != "true" ] &&
+# 	# Note that the use of brackets around a tr range is ok here, (it's
+# 	# even required, for portability to Solaris 10's /usr/bin/tr), since
+# 	# the square bracket bytes happen to fall in the designated range.
+# 	test $(git diff --cached --name-only --diff-filter=A -z $against |
+# 	  LC_ALL=C tr -d '[ -~]\0' | wc -c) != 0
+# then
+# 	cat <<\EOF
+# Error: Attempt to add a non-ASCII file name.
+#
+# This can cause problems if you want to work with people on other platforms.
+#
+# To be portable it is advisable to rename the file.
+#
+# If you know what you are doing you can disable this check using:
+#
+#   git config hooks.allownonascii true
+# EOF
+# 	exit 1
+# fi
+#
+# # If there are whitespace errors, print the offending file names and fail.
+# exec git diff-index --check --cached $against --
 
-# If you want to allow non-ASCII filenames set this variable to true.
-allownonascii=$(git config --bool hooks.allownonascii)
-
-# Redirect output to stderr.
-exec 1>&2
-
-# Cross platform projects tend to avoid non-ASCII filenames; prevent
-# them from being added to the repository. We exploit the fact that the
-# printable range starts at the space character and ends with tilde.
-if [ "$allownonascii" != "true" ] &&
-	# Note that the use of brackets around a tr range is ok here, (it's
-	# even required, for portability to Solaris 10's /usr/bin/tr), since
-	# the square bracket bytes happen to fall in the designated range.
-	test $(git diff --cached --name-only --diff-filter=A -z $against |
-	  LC_ALL=C tr -d '[ -~]\0' | wc -c) != 0
-then
-	cat <<\EOF
-Error: Attempt to add a non-ASCII file name.
-
-This can cause problems if you want to work with people on other platforms.
-
-To be portable it is advisable to rename the file.
-
-If you know what you are doing you can disable this check using:
-
-  git config hooks.allownonascii true
-EOF
-	exit 1
-fi
-
-# If there are whitespace errors, print the offending file names and fail.
-exec git diff-index --check --cached $against --
+### Validate difference between Real-time and System-time (JST only) ###
+# @param $1=allowed_diff_max_sec
+validateSysTime() {
+    local allowed_diff_max_sec=$1
+    local curl_time_out_max_sec=5
+    local real_sec=$(curl -s 'http://ntp-a1.nict.go.jp/cgi-bin/jst' --max-time $curl_time_out_max_sec | grep -E "[0-9]{10}\.[0-9]{3}")
+    if [ -z "$real_sec" ]; then
+        echo "*** Can't commit! ***"
+        echo "[CAUSE] Fail to connect 'ntp-a1.nict.go.jp' (time-out $curl_time_out_max_sec seconds). Fix connect internet (ex. FireWall setting) or Remove this check script. (This check was called by '/.git/hooks/pre-commit'.)"
+        exit 1
+    fi
+    local real_sec=`echo $real_sec | cut -c 0-10` # decimal to int
+    local sys_sec=$(date +%s)
+    local diff_sec=`expr $real_sec - $sys_sec`
+    if [ $diff_sec -lt 0 ]; then # minus to absolute value
+        diff_sec=`expr $diff_sec \* -1`
+    fi
+    if [ $allowed_diff_max_sec -lt $diff_sec ]; then
+        echo "*** Can't commit! ***"
+        echo "[CAUSE] System-time is deviated over '$allowed_diff_max_sec' seconds. Fix your System-time."
+        exit 1
+    fi
+}
+validateSysTime 300
