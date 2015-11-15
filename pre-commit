@@ -59,7 +59,7 @@ validateSysTime() {
         echo "[CAUSE] Fail to connect 'ntp-a1.nict.go.jp' (time-out $curl_time_out_max_sec seconds). Fix connect internet (ex. FireWall setting) or Remove this check script. (This check was called by '/.git/hooks/pre-commit'.)"
         exit 1
     fi
-    local real_sec=`echo $real_sec | cut -c 0-10` # decimal to int
+    local real_sec=`echo $real_sec | cut -c 1-10` # decimal to int
     local sys_sec=$(date +%s)
     local diff_sec=`expr $real_sec - $sys_sec`
     if [ $diff_sec -lt 0 ]; then # minus to absolute value
